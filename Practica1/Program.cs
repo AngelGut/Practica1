@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using Practica1.Atributos;
 using Practica1.Clases;        // Estudiante, Profesor, TipoContrato
 using Practica1.Modelos;     // Curso, Matricula, GestorMatriculas, Validador, AnalizadorReflection
@@ -21,9 +22,12 @@ namespace Practica1
 
         static void Main()
         {
+
             // Configuración inicial
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+
+            Login(); // ← solicita login antes de continuar
 
             Logger.Info("Aplicación iniciada"); // <-- 🔹 Aquí, al comenzar
 
@@ -106,6 +110,7 @@ namespace Practica1
                 Error($"Ocurrió un error: {ex.Message}");
                 Pausa();
             }
+
         }
 
         // ============================
@@ -425,49 +430,161 @@ namespace Practica1
                     switch (op)
                     {
                         case 1:
-                            var id = LeerNoVacio("ID Estudiante");
-                            Console.WriteLine(Gestor.GenerarReporteEstudiante(id));
-                            Pausa();
+                            // Reporte por Estudiante (tabla de sus cursos y promedios)
+                            {
+                                var id = LeerNoVacio("ID Estudiante");
+                                var mats = Gestor.ObtenerMatriculasPorEstudiante(id);
+                                if (mats.Count == 0) { Aviso($"No hay matrículas para {id}."); Pausa(); break; }
+
+                                var est = mats.First().Estudiante;
+                                Titulo($"Reporte de {est.Nombre} {est.Apellido} (ID: {est.Identificacion})");
+
+                                var headers = new[] { "Código", "Curso", "Promedio", "Estado", "Fecha" };
+                                var rows = mats.Select(m => new[]
+                                {
+                                        m.Curso.Codigo,
+                                        m.Curso.Nombre,
+                                        m.ObtenerPromedio().ToString("0.00"),
+                                        m.ObtenerEstado(),
+                                        m.FechaMatricula.ToString("yyyy-MM-dd")
+                                    }).ToList();
+
+                                TablaConsola.EscribirTabla(headers, rows,
+                                    colorBorde: ConsoleColor.DarkCyan,
+                                    colorHeader: ConsoleColor.Cyan,
+                                    colorFila: ConsoleColor.White,
+                                    colorFilaAlterna: ConsoleColor.Gray);
+
+                                Pausa();
+                            }
                             break;
 
                         case 2:
-                            var top = Gestor.ObtenerTop10Estudiantes();
-                            if (top.Count == 0) { Aviso("Sin datos."); Pausa(); break; }
-                            int rank = 1;
-                            foreach (var e in top)
-                                Console.WriteLine($"{rank++:00}. {e.Estudiante.Nombre} {e.Estudiante.Apellido} - {e.Promedio:0.00}");
-                            Pausa();
+                            // Top 10 Estudiantes
+                            {
+                                var top = Gestor.ObtenerTop10Estudiantes();
+                                if (top.Count == 0) { Aviso("Sin datos."); Pausa(); break; }
+
+                                var headers = new[] { "Pos", "ID", "Nombre", "Promedio" };
+                                var rows = top.Select((e, i) => new[]
+                                {
+                                        (i + 1).ToString("00"),
+                                        e.Estudiante.Identificacion,
+                                        $"{e.Estudiante.Nombre} {e.Estudiante.Apellido}",
+                                        e.Promedio.ToString("0.00")
+                                    }).ToList();
+
+                                TablaConsola.EscribirTabla(headers, rows,
+                                    colorBorde: ConsoleColor.DarkYellow,
+                                    colorHeader: ConsoleColor.Yellow,
+                                    colorFila: ConsoleColor.White,
+                                    colorFilaAlterna: ConsoleColor.Gray);
+
+                                Pausa();
+                            }
                             break;
 
                         case 3:
-                            var riesgo = Gestor.ObtenerEstudiantesEnRiesgo();
-                            if (riesgo.Count == 0) { Aviso("Nadie en riesgo."); Pausa(); break; }
-                            foreach (var e in riesgo)
-                                Console.WriteLine($"{e.Identificacion} - {e.Nombre} {e.Apellido}");
-                            Pausa();
+                            // Estudiantes en riesgo (< 7.0) + promedio actual
+                            {
+                                var riesgo = Gestor.ObtenerEstudiantesEnRiesgo();
+                                if (riesgo.Count == 0) { Aviso("Nadie en riesgo."); Pausa(); break; }
+
+                                var headers = new[] { "ID", "Nombre", "Carrera", "Promedio" };
+                                var rows = riesgo.Select(est =>
+                                {
+                                    // promedio general del estudiante (promedio de sus cursos)
+                                    var mats = Gestor.ObtenerMatriculasPorEstudiante(est.Identificacion);
+                                    var prom = mats.Count == 0 ? 0m : mats.Average(m => m.ObtenerPromedio());
+                                    return new[]
+                                    {
+                                            est.Identificacion,
+                                            $"{est.Nombre} {est.Apellido}",
+                                            est.Carrera ?? "",
+                                            prom.ToString("0.00")
+                                        };
+                                }).OrderBy(r => r[3]) // ordenar por promedio ascendente
+                                  .ToList();
+
+                                TablaConsola.EscribirTabla(headers, rows,
+                                    colorBorde: ConsoleColor.DarkRed,
+                                    colorHeader: ConsoleColor.Red,
+                                    colorFila: ConsoleColor.White,
+                                    colorFilaAlterna: ConsoleColor.Gray);
+
+                                Pausa();
+                            }
                             break;
 
                         case 4:
-                            var pop = Gestor.ObtenerCursosMasPopulares();
-                            if (pop.Count == 0) { Aviso("Sin cursos."); Pausa(); break; }
-                            foreach (var c in pop)
-                                Console.WriteLine($"{c.Curso.Codigo} - {c.Curso.Nombre} | Estudiantes: {c.CantidadEstudiantes}");
-                            Pausa();
+                            // Cursos más populares
+                            {
+                                var pop = Gestor.ObtenerCursosMasPopulares();
+                                if (pop.Count == 0) { Aviso("Sin cursos."); Pausa(); break; }
+
+                                var headers = new[] { "Código", "Curso", "Estudiantes" };
+                                var rows = pop.Select(c => new[]
+                                {
+                                        c.Curso.Codigo,
+                                        c.Curso.Nombre,
+                                        c.CantidadEstudiantes.ToString()
+                                    }).ToList();
+
+                                TablaConsola.EscribirTabla(headers, rows,
+                                    colorBorde: ConsoleColor.DarkGreen,
+                                    colorHeader: ConsoleColor.Green,
+                                    colorFila: ConsoleColor.White,
+                                    colorFilaAlterna: ConsoleColor.Gray);
+
+                                Pausa();
+                            }
                             break;
 
                         case 5:
-                            Console.WriteLine($"Promedio General: {Gestor.ObtenerPromedioGeneral():0.00}");
-                            Pausa();
+                            // Promedio general (tabla 1x2)
+                            {
+                                var promedio = Gestor.ObtenerPromedioGeneral();
+                                var headers = new[] { "Métrica", "Valor" };
+                                var rows = new List<string[]>
+                                    {
+                                        new[] { "Promedio General", promedio.ToString("0.00") }
+                                    };
+
+                                TablaConsola.EscribirTabla(headers, rows,
+                                    colorBorde: ConsoleColor.DarkMagenta,
+                                    colorHeader: ConsoleColor.Magenta,
+                                    colorFila: ConsoleColor.White,
+                                    colorFilaAlterna: ConsoleColor.Gray);
+
+                                Pausa();
+                            }
                             break;
 
                         case 6:
-                            var estats = Gestor.ObtenerEstadisticasPorCarrera();
-                            if (estats.Count == 0) { Aviso("Sin datos."); Pausa(); break; }
-                            foreach (var e in estats)
-                                Console.WriteLine($"{e.Carrera} | Cant.: {e.Cantidad} | Prom.: {e.PromedioGeneral:0.00}");
-                            Pausa();
+                            // Estadísticas por carrera
+                            {
+                                var estats = Gestor.ObtenerEstadisticasPorCarrera();
+                                if (estats.Count == 0) { Aviso("Sin datos."); Pausa(); break; }
+
+                                var headers = new[] { "Carrera", "Cantidad", "Promedio" };
+                                var rows = estats.Select(e => new[]
+                                {
+                                        e.Carrera,
+                                        e.Cantidad.ToString(),
+                                        e.PromedioGeneral.ToString("0.00")
+                                    }).ToList();
+
+                                TablaConsola.EscribirTabla(headers, rows,
+                                    colorBorde: ConsoleColor.DarkBlue,
+                                    colorHeader: ConsoleColor.Blue,
+                                    colorFila: ConsoleColor.White,
+                                    colorFilaAlterna: ConsoleColor.Gray);
+
+                                Pausa();
+                            }
                             break;
                     }
+
                 }
                 catch (Exception ex)
                 {
@@ -807,6 +924,61 @@ namespace Practica1
             if (state is not null)
                 RestaurarDesdeSnapshot(state);
         }
+
+        //para el login
+
+        private static void Login()
+        {
+            Console.Clear();
+            Titulo("Autenticación del Sistema");
+
+            int intentos = 0;
+            while (intentos < 3)
+            {
+                var usuario = LeerNoVacio("Usuario");
+                Console.Write("Contraseña: ");
+                var contrasena = LeerPassword();
+
+                if (AuthService.ValidarLogin(usuario, contrasena))
+                {
+                    Exito($"Bienvenido, {usuario}!");
+                    Logger.Info($"Inicio de sesión exitoso: {usuario}", "Login");
+                    Pausa();
+                    return;
+                }
+
+                intentos++;
+                Error("Credenciales inválidas.");
+                Logger.Warn($"Intento fallido de inicio de sesión ({intentos}/3) para usuario: {usuario}", "Login");
+            }
+
+            Logger.Warn("Demasiados intentos de inicio de sesión fallidos. Cerrando.", "Login");
+            Error("Demasiados intentos fallidos. El programa se cerrará.");
+            Environment.Exit(0);
+        }
+
+        // Método auxiliar para ocultar contraseña
+        private static string LeerPassword()
+        {
+            var pass = new StringBuilder();
+            ConsoleKeyInfo key;
+            while ((key = Console.ReadKey(true)).Key != ConsoleKey.Enter)
+            {
+                if (key.Key == ConsoleKey.Backspace && pass.Length > 0)
+                {
+                    pass.Remove(pass.Length - 1, 1);
+                    Console.Write("\b \b");
+                }
+                else if (!char.IsControl(key.KeyChar))
+                {
+                    pass.Append(key.KeyChar);
+                    Console.Write('*');
+                }
+            }
+            Console.WriteLine();
+            return pass.ToString();
+        }
+
 
     }
 }
