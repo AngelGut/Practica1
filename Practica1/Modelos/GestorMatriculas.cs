@@ -250,6 +250,10 @@ namespace Practica1.Modelos
 
         private bool ExisteMatricula(string idEstudiante, string codigoCurso)
             => BuscarMatricula(idEstudiante, codigoCurso) is not null;
+
+        //requerido para el json
+        public IReadOnlyList<Matricula> ExportarMatriculas() => _matriculas.AsReadOnly();
+
     }
 }
 

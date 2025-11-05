@@ -4,6 +4,7 @@ using System.Linq;
 using Practica1.Atributos;
 using Practica1.Clases;        // Estudiante, Profesor, TipoContrato
 using Practica1.Modelos;     // Curso, Matricula, GestorMatriculas, Validador, AnalizadorReflection
+using Practica1.Servicios;  // Json
 
 
 namespace Practica1
@@ -20,6 +21,17 @@ namespace Practica1
 
         static void Main()
         {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+
+            CargarTodo();                // ← intenta cargar desde JSON
+            if (RepoEstudiantes.ObtenerTodos().Count == 0 &&
+                RepoProfesores.ObtenerTodos().Count == 0 &&
+                RepoCursos.ObtenerTodos().Count == 0)
+            {
+                SembrarDatosIniciales(); // ← solo si no había datos
+            }
+
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 
@@ -53,6 +65,7 @@ namespace Practica1
                         case 6: MenuReportes(); break;
                         case 7: MenuReflection(); break;
                         case 8:
+                            GuardarTodo();  // ← persistir
                             Informar("Gracias por usar el sistema. ¡Hasta pronto!");
                             return;
                     }
@@ -693,5 +706,77 @@ namespace Practica1
                 // Ignorar duplicados si se ejecuta más de una vez
             }
         }
+
+        private const string DATA_FILE = "datos.json";
+
+        // Crea el snapshot con TODO el estado actual
+        private static AppState CrearSnapshot()
+        {
+            // Estudiantes y profesores tal cual
+            var ests = RepoEstudiantes.ObtenerTodos().ToList();
+            var profs = RepoProfesores.ObtenerTodos().ToList();
+
+            // Cursos → DTO con ProfesorId (ya corregiste a ProfesorAsignado)
+            var cursosDto = RepoCursos.ObtenerTodos()
+                .Select(c => new CursoDTO(c.Codigo, c.Nombre, c.Creditos, c.ProfesorAsignado.Identificacion))
+                .ToList();
+
+            // Matrículas → DTO con IDs + calificaciones
+            var matsDto = Gestor.ExportarMatriculas()
+                .Select(m => new MatriculaDTO(
+                    m.Estudiante.Identificacion,
+                    m.Curso.Codigo,
+                    m.FechaMatricula,          // ← antes usabas m.Fecha
+                    m.Calificaciones.ToList()  // ← antes llamabas ObtenerCalificaciones()
+                ))
+                .ToList();
+
+
+            return new AppState(ests, profs, cursosDto, matsDto);
+        }
+
+        // Reconstruye el estado desde un snapshot
+        private static void RestaurarDesdeSnapshot(AppState state)
+        {
+            // Limpia y repuebla repos
+            foreach (var e in state.Estudiantes) RepoEstudiantes.Agregar(e);
+            foreach (var p in state.Profesores) RepoProfesores.Agregar(p);
+
+            // Cursos: vincula profesor por id
+            foreach (var c in state.Cursos)
+            {
+                var prof = RepoProfesores.BuscarPorId(c.ProfesorId)
+                           ?? throw new InvalidOperationException($"Profesor {c.ProfesorId} no existe (snapshot).");
+                RepoCursos.Agregar(new Curso(c.Codigo, c.Nombre, c.Creditos, prof));
+            }
+
+            // Matrículas: vincula estudiante/curso y repone notas
+            foreach (var m in state.Matriculas)
+            {
+                var est = RepoEstudiantes.BuscarPorId(m.EstudianteId)
+                          ?? throw new InvalidOperationException($"Estudiante {m.EstudianteId} no existe (snapshot).");
+                var cur = RepoCursos.BuscarPorId(m.CursoCodigo)
+                          ?? throw new InvalidOperationException($"Curso {m.CursoCodigo} no existe (snapshot).");
+
+                Gestor.MatricularEstudiante(est, cur);
+
+                foreach (var nota in m.Calificaciones)
+                    Gestor.AgregarCalificacion(m.EstudianteId, m.CursoCodigo, nota);
+            }
+        }
+
+        private static void GuardarTodo()
+        {
+            var state = CrearSnapshot();
+            JsonHelper.GuardarObjeto(state, DATA_FILE);
+        }
+
+        private static void CargarTodo()
+        {
+            var state = JsonHelper.CargarObjeto<AppState>(DATA_FILE);
+            if (state is not null)
+                RestaurarDesdeSnapshot(state);
+        }
+
     }
 }
