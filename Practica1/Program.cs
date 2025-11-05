@@ -21,60 +21,90 @@ namespace Practica1
 
         static void Main()
         {
+            // Configuración inicial
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 
-            CargarTodo();                // ← intenta cargar desde JSON
-            if (RepoEstudiantes.ObtenerTodos().Count == 0 &&
-                RepoProfesores.ObtenerTodos().Count == 0 &&
-                RepoCursos.ObtenerTodos().Count == 0)
+            Logger.Info("Aplicación iniciada"); // <-- 🔹 Aquí, al comenzar
+
+            try
             {
-                SembrarDatosIniciales(); // ← solo si no había datos
-            }
-
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
-            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
-
-            // Semillas opcionales
-            SembrarDatosIniciales();
-
-            while (true)
-            {
-                Console.Clear();
-                Titulo("Sistema Académico - Menú Principal");
-                Console.WriteLine("1) Gestionar Estudiantes (Agregar, Listar, Buscar, Modificar, Eliminar)");
-                Console.WriteLine("2) Gestionar Profesores (Agregar, Listar, Buscar, Modificar, Eliminar)");
-                Console.WriteLine("3) Gestionar Cursos (Agregar, Listar, Asignar Profesor)");
-                Console.WriteLine("4) Matricular Estudiante en Curso");
-                Console.WriteLine("5) Registrar Calificaciones");
-                Console.WriteLine("6) Ver Reportes (Estudiantes, Cursos, Estadísticas)");
-                Console.WriteLine("7) Análisis con Reflection");
-                Console.WriteLine("8) Salir");
-                Console.WriteLine();
-
-                var op = LeerOpcion("Seleccione una opción", 1, 8);
-                try
+                CargarTodo(); // ← intenta cargar desde JSON
+                if (RepoEstudiantes.ObtenerTodos().Count == 0 &&
+                    RepoProfesores.ObtenerTodos().Count == 0 &&
+                    RepoCursos.ObtenerTodos().Count == 0)
                 {
+                    SembrarDatosIniciales();
+                    Logger.Info("Datos iniciales sembrados");
+                }
+
+                // Bucle principal del menú
+                while (true)
+                {
+                    Console.Clear();
+                    Titulo("Sistema Académico - Menú Principal");
+                    Console.WriteLine("1) Gestionar Estudiantes");
+                    Console.WriteLine("2) Gestionar Profesores");
+                    Console.WriteLine("3) Gestionar Cursos");
+                    Console.WriteLine("4) Matricular Estudiante");
+                    Console.WriteLine("5) Registrar Calificaciones");
+                    Console.WriteLine("6) Ver Reportes");
+                    Console.WriteLine("7) Análisis con Reflection");
+                    Console.WriteLine("8) Salir\n");
+
+                    var op = LeerOpcion("Seleccione una opción", 1, 8);
+
                     switch (op)
                     {
-                        case 1: MenuEstudiantes(); break;
-                        case 2: MenuProfesores(); break;
-                        case 3: MenuCursos(); break;
-                        case 4: MenuMatricular(); break;
-                        case 5: MenuCalificaciones(); break;
-                        case 6: MenuReportes(); break;
-                        case 7: MenuReflection(); break;
+                        case 1:
+                            Logger.Info("Entrando al menú de Estudiantes");
+                            MenuEstudiantes();
+                            break;
+
+                        case 2:
+                            Logger.Info("Entrando al menú de Profesores");
+                            MenuProfesores();
+                            break;
+
+                        case 3:
+                            Logger.Info("Entrando al menú de Cursos");
+                            MenuCursos();
+                            break;
+
+                        case 4:
+                            Logger.Info("Matricular estudiante en curso");
+                            MenuMatricular();
+                            break;
+
+                        case 5:
+                            Logger.Info("Registrar calificaciones");
+                            MenuCalificaciones();
+                            break;
+
+                        case 6:
+                            Logger.Info("Generar reportes y estadísticas");
+                            MenuReportes();
+                            break;
+
+                        case 7:
+                            Logger.Info("Ejecutar análisis con Reflection");
+                            MenuReflection();
+                            break;
+
                         case 8:
-                            GuardarTodo();  // ← persistir
+                            Logger.Info("Guardando estado antes de salir");
+                            GuardarTodo();
+                            Logger.Info("Aplicación finalizada correctamente");
                             Informar("Gracias por usar el sistema. ¡Hasta pronto!");
                             return;
                     }
                 }
-                catch (Exception ex)
-                {
-                    Error($"Ocurrió un error: {ex.Message}");
-                    Pausa();
-                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Excepción no controlada en Main", "Main", ex);
+                Error($"Ocurrió un error: {ex.Message}");
+                Pausa();
             }
         }
 
