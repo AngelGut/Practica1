@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Practica1.Atributos;
-using Practica1.Clases;        // Estudiante, Profesor, TipoContrato
+using Practica1.Clases;       // Estudiante, Profesor, TipoContrato
 using Practica1.Modelos;     // Curso, Matricula, GestorMatriculas, Validador, AnalizadorReflection
 using Practica1.Servicios;  // Json
 
